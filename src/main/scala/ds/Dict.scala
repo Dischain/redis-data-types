@@ -1,7 +1,5 @@
 package ds
 
-import scala.collection.mutable
-
 final class Dict[A, B] {
   import Dict._
   import util.MurmurHash2._
@@ -36,7 +34,7 @@ final class Dict[A, B] {
   def dictAdd(key: A, value: B): Option[DictEntry[A, B]] = {
     var he: Option[DictEntry[A, B]] = null.asInstanceOf[Option[DictEntry[A, B]]]
 
-    if (dictIsRehashing) dictRehashStep
+    if (dictIsRehashing) dictRehash()
 
     dictKeyIndex(key) match {
       case None => he = None
@@ -45,7 +43,7 @@ final class Dict[A, B] {
         val entry = new DictEntry[A, B](key, value)
 
         entry.next = ht.get(index)
-        ht.set(index, entry)
+        ht.put(index, entry)
         he = Some(entry)
       }
     }
@@ -78,10 +76,10 @@ final class Dict[A, B] {
 
     dict(1) = nht
     rehashIdx = 0
-    return Some(1)
+    Some(1)
   }
 
-  def dictRehash(n: Int): Option[Int] = {
+  def dictRehash(n: Int = 1): Option[Int] = {
     var emptyVisits = n * 10
     var nsteps = n
     var res: Option[Int] = null.asInstanceOf[Option[Int]]
@@ -106,13 +104,13 @@ final class Dict[A, B] {
 
         var newIndex = hashString(de.key) & dict(1).sizeMask
         de.next = dict(1).get(newIndex)
-        dict(1).set(newIndex, de)
+        dict(1).put(newIndex, de)
         dict(0).used -= 1
         dict(1).used -= 1
         de = nde
       }
 
-      dict(0).set(rehashIdx, null.asInstanceOf[DictEntry[A, B]])
+      dict(0).put(rehashIdx, null.asInstanceOf[DictEntry[A, B]])
       rehashIdx += 1
       nsteps -= 1
     }
@@ -127,8 +125,6 @@ final class Dict[A, B] {
 
     res
   }
-
-  def dictRehashStep: Int = dictRehash(1)
 }
 
 private object Dict {

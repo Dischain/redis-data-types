@@ -25,7 +25,6 @@ object MurmurHash2 {
       h *= m
       h ^= k
 
-      data += 4
       len -= 4
     }
 
