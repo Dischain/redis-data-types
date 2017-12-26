@@ -15,43 +15,56 @@ final class Dict[A, B] {
   private def dictIsRehashing: Boolean = rehashIdx != -1
 
   private def dictKeyIndex(key: A): Option[Int] = {
-    val hash = hashString(key)
-    var idx: Int = -1
+    val hash: Int = hashString(key.toString)
 
-    for (table <- dict) {
-      idx = hash & table.sizeMask
-      var he = table.get(idx)
-
-      while (he != null) {
-        if (key == he.key) return None
-        he = he.next
-      }
-    }
-
-    Some(idx)
+    if (dictIsRehashing) dict(1).filterIndex(hash, key)
+    else dict(0).filterIndex(hash, key)
   }
 
   def dictAdd(key: A, value: B): Option[DictEntry[A, B]] = {
-    var he: Option[DictEntry[A, B]] = null.asInstanceOf[Option[DictEntry[A, B]]]
-
     if (dictIsRehashing) dictRehash()
 
     dictKeyIndex(key) match {
-      case None => he = None
-      case Some(index) if index != -1 => {
+      case Some(-1) => None
+      case Some(index) => {
         val ht = if (dictIsRehashing) dict(1) else dict(0)
         val entry = new DictEntry[A, B](key, value)
 
         entry.next = ht.get(index)
         ht.put(index, entry)
-        he = Some(entry)
+        Some(entry)
       }
+      case _ => None
     }
-
-    he
   }
 
-  def dictResize: Option[Int] = {
+  def dictDelete(key: A): Option[DictEntry[A, B]] = {
+    if (dict(0).used != 0 && dict(0).used != 0) {
+      if (dictIsRehashing) dictRehash()
+
+      val h: Int = hashString(key.toString)
+
+      if (dictIsRehashing) dict(1).removeIndex(h, key)
+      else dict(0).removeIndex(h, key)
+    } else None
+  }
+
+  def dictFind(key: A): Option[DictEntry[A, B]] = {
+    if (dictUsed == 0) None
+    else {
+      if (dictIsRehashing) dictRehash()
+
+      val h: Int = hashString(key.toString)
+
+      val res = for {
+        table <- dict
+      } yield table.findIndex(h, key)
+
+      res.head
+    }
+  }
+
+  private[ds] def dictResize = {
     var minimal = dict(0).used
 
     if (minimal < initialSize) minimal = initialSize
@@ -59,71 +72,49 @@ final class Dict[A, B] {
     dictExpand(minimal)
   }
 
-  def dictExpand(size: Int): Option[Int] = {
-    var nht: DictHT[A, B] = null.asInstanceOf[DictHT[A, B]]
-
+  private def dictExpand(size: Int) = {
     val realSize: Int = _nextPower(size)
 
-    if ((dictIsRehashing || dict(0).used > size) || (realSize == dict(0).size))
-      return Some(0)
+    if (!(dictIsRehashing || dict(0).used > size) && !(realSize == dict(0).size)) {
+      val nht: DictHT[A, B] = new DictHT[A, B](realSize)
 
-    nht = new DictHT[A, B](realSize)
-
-    if (dict(0).used == 0) {
-      dict(0) = nht
-      return Some(1)
+      if (dict(0).used == 0) {
+        dict(0) = nht
+      } else {
+        dict(1) = nht
+        rehashIdx = 0
+      }
     }
-
-    dict(1) = nht
-    rehashIdx = 0
-    Some(1)
   }
 
-  def dictRehash(n: Int = 1): Option[Int] = {
+  private def dictRehash(n: Int = 1): Unit = {
     var emptyVisits = n * 10
     var nsteps = n
-    var res: Option[Int] = null.asInstanceOf[Option[Int]]
-    if (dictIsRehashing) res = Some(0)
 
-    while (nsteps >= 0 && dict(0).used != 0) {
-      var de: DictEntry[A, B] = null.asInstanceOf[DictEntry[A, B]]
-      var nde: DictEntry[A, B] = null.asInstanceOf[DictEntry[A, B]]
+    if (dictIsRehashing) {
+      while (nsteps > 0 && dict(0).used != 0) {
+        while (dict(0).get(rehashIdx) == null || emptyVisits != 0) {
+          rehashIdx += 1
+          emptyVisits -= 1
+        }
 
+        dict(0).get(rehashIdx).forEach((de: DictEntry[A, B]) => {
+          val newIndex: Int = hashString(de.key.toString) & dict(1).sizeMask
+          dict(1).put(newIndex, de)
+          dict(0).used -= 1
+          dict(1).used += 1
+        })
 
-      assert(dict(0).size > rehashIdx)
-      while (dict(0).get(rehashIdx) == null) {
+        dict(0).put(rehashIdx, null)
         rehashIdx += 1
-        emptyVisits -= 1
-        if (emptyVisits == 0) res = Some(1)
+        nsteps -= 1
       }
 
-      de = dict(0).get(rehashIdx)
-
-      while (de != null) {
-        nde = de.next
-
-        var newIndex = hashString(de.key) & dict(1).sizeMask
-        de.next = dict(1).get(newIndex)
-        dict(1).put(newIndex, de)
-        dict(0).used -= 1
-        dict(1).used -= 1
-        de = nde
+      if (dict(0).used == 0) {
+        dict(0) = dict(1)
+        dict(1).clear
       }
-
-      dict(0).put(rehashIdx, null.asInstanceOf[DictEntry[A, B]])
-      rehashIdx += 1
-      nsteps -= 1
     }
-
-    if (dict(0).used == 0) {
-      dict(0) = dict(1)
-      dict(1).clear
-      res = Some(0)
-    } else {
-      res = Some(1)
-    }
-
-    res
   }
 }
 
