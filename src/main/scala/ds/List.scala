@@ -42,12 +42,23 @@ sealed trait List[+A] {
       tail.forEach(f)
     }
   }
+
+  def foldLeft[B](z: B)(f: (B, A) => B): B = {
+    def loop(l: List[A], acc: B): B = {
+      l match {
+        case Nil => acc
+        case Cons(h, t) => loop(t, f(acc, h))
+      }
+    }
+
+    loop(this, z)
+  }
 }
 
 final case class Cons[A](head: A, tail: List[A]) extends List[A] {
   override def isEmpty: Boolean = false
 
-  override def length: Int = 1 + tail.length
+  override def length: Int = foldLeft(0)((acc, _) => acc + 1)
 }
 
 case object Nil extends List[Nothing] {
