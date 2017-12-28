@@ -53,6 +53,11 @@ sealed trait List[+A] {
 
     loop(this, z)
   }
+
+  def map[B](f: A => B): List[B] = {
+    if (isEmpty) Nil
+    else tail.map(f).prepend(f(head))
+  }
 }
 
 final case class Cons[A](head: A, tail: List[A]) extends List[A] {
