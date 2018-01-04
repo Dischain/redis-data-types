@@ -75,7 +75,7 @@ case object Nil extends List[Nothing] {
 
   override def isEmpty: Boolean = true
 
-  override def length: Int = 0
+  val length: Int = 0
 }
 
 object List {
