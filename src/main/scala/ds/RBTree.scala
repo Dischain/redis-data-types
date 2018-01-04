@@ -1,41 +1,31 @@
 package ds
 
-//sealed abstract class RBTree[+A: Ordered, B] {
-sealed abstract class RBTree[+A <% Ordered[A], B] {
-  def color: Color
+sealed trait RBTree[+A, B] {
 
-  def key: A
+  implicit def orderingByC[C >: A]: Ordering[C] = new Ordering[C] {
+    override def compare(x: C, y: C): Int = x.## - y.##
 
-  def value: B
+    override def lt(x: C, y: C): Boolean = super.lt(x, y)
 
-  def left: RBTree[A, B]
+    override def equals(obj: scala.Any): Boolean = super.equals(obj)
+  }
 
-  def right: RBTree[A, B]
-
-  def isEmpty: Boolean
-
-  def add[C >: A <% Ordered[C]](k: C, v: B): RBTree[C, B] = {
+  def add[C >: A](k: C, v: B): RBTree[C, B] = {
     blacken(selectBranch(k, v))
   }
 
-  def get[C >: A <% Ordered[C]](k: C): Option[B] = {
-    if (k < key) left.get(k)
-    else if (k > key) right.get(k)
-    else Option(value)
-  }
+  def get[C >: A](k: C): Option[B]
 
-  private def selectBranch[C >: A <% Ordered[C]](k: C, v: B): RBTree[C, B] = {
-    if (k < key) balance(Tree(color, left.selectBranch(k, v), key, value, right))
-    else if (k == key) Tree(color, left, k, v, right)
-    else balance(Tree(color, left, key, value, right.selectBranch(k, v)))
-  }
+  def delete[C >: A](k: C): Option[B]
 
-  private def blacken[C >: A <% Ordered[C]](node: RBTree[C, B]) = node match {
+  private[ds] def selectBranch[C >: A](k: C, v: B): RBTree[C, B]
+
+  private[ds] def blacken[C >: A](node: RBTree[C, B]): RBTree[C, B] = node match {
+    case Leaf() => node
     case Tree(_, l, k, v, r) => Tree(Black, l, k, v, r)
-    case _ => node
   }
 
-  private def balance[C >: A <% Ordered[C]](node: RBTree[C, B]) = node match {
+  private[ds] def balance[C >: A](node: RBTree[C, B]): RBTree[C, B] = node match {
     // black parent with left red child, which has left red child
     case Tree(Black,Tree(Red,Tree(Red,l1,k1,v1,r1),k2,v2,r2),k3,v3,r3) =>
       Tree(Red,Tree(Black,l1,k1,v1,r1),k2,v2,Tree(Black,r2,k3, v3,r3))
@@ -52,29 +42,40 @@ sealed abstract class RBTree[+A <% Ordered[A], B] {
   }
 }
 
-final case class Tree[+A: Ordered, B](
+final case class Tree[+A : Ordering, B](
   color: Color,
   left: RBTree[A, B],
   key: A,
   value: B,
   right: RBTree[A, B]) extends RBTree[A, B]
 {
+  val isEmpty = false
 
-  def isEmpty = false
+  def get[C >: A](k: C): Option[B] = {
+    if (implicitly[Ordering[C]].lt(k, key)) left.get(k)
+    else if (implicitly[Ordering[C]].gt(k, key)) right.get(k)
+    else Option(value)
+  }
+
+  def delete[C >: A](k: C): Option[B] = ???
+
+  private[ds] def selectBranch[C >: A](k: C, v: B): RBTree[C, B] = {
+    if (implicitly[Ordering[C]].lt(k, key))
+      balance(Tree(color, left.selectBranch(k, v), key, value, right))
+    else if (implicitly[Ordering[C]].equals(k, key))
+      Tree(color, left, k, v, right)
+    else balance(Tree(color, left, key, value, right.selectBranch(k, v)))
+  }
 }
 
-case object Leaf extends RBTree[Nothing, Nothing] {
-  def color: Color = Black
+final case class Leaf[A, B]() extends RBTree[A, B] {
+  def get[C >: Nothing](k: C): Option[Nothing] = None
 
-  def key = throw new NoSuchElementException("Empty leaf")
+  def delete[C >: Nothing](k: C): Option[Nothing] = None
 
-  def value = throw new NoSuchElementException("Empty leaf")
-
-  def left = throw new NoSuchElementException("Empty leaf")
-
-  def right = throw new NoSuchElementException("Empty leaf")
-
-  def isEmpty = true
+  private[ds] def selectBranch[C >: A](k: C, v: B): RBTree[C, B] = {
+    Tree(Red, this, k, v, this)
+  }
 }
 
 sealed trait Color
@@ -82,9 +83,8 @@ case object Red extends Color
 case object Black extends Color
 
 object RBTree {
-  def apply[A <% Ordered[A], B](item: (A, B)): RBTree[A, B] = {
-    val t: RBTree[A, B] = Leaf[Nothing, Nothing]
+  def apply[A : Ordering, B](item: (A, B)): RBTree[A, B] = {
+    val t: RBTree[A, B] = Leaf()
     t.add(item._1, item._2)
-    t
   }
 }
