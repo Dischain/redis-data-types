@@ -30,9 +30,24 @@ sealed trait RBTree[+A, B] {
     case Tree(_, l, k, v, r) => Tree(Black, l, k, v, r)
   }
 
-  protected[ds] def handleDelition[C >: A](node: RBTree[C, B]): RBTree[C, B] = {
+  protected[ds] def handleDeletion[C >: A](node: RBTree[C, B], k: C): RBTree[C, B] = {
     println("handle delition: " + node)
+    node match {
+      case Tree(cp, Tree(cl, ll, kl, vl, rl), kp, vp, Tree(cr, lr, kr, vr, rr)) =>
+        bstDeletion(parentNode = node, k)
+      case Tree(c, Leaf(), k, v, Leaf()) => Leaf()
+      case _ => ??? // handle crazy rbt deletion
+    }
     node
+  }
+
+  private[this] def bstDeletion[C >: A](parentNode: RBTree[C, B], k: C): RBTree[C, B] = {
+    parentNode match {
+      case Tree(cp, Tree(cl, ll, kl, vl, rl), kp, vp, Tree(cr, lr, kr, vr, rr)) if kl == k =>
+        Tree(cp, getMin(rl), kp, vp, Tree(cr, lr, kr, vr, rr))
+      case Tree(cp, Tree(cl, ll, kl, vl, rl), kp, vp, Tree(cr, lr, kr, vr, rr)) if kr == k =>
+        Tree(cp, Tree(cl, ll, kl, vl, rl), kp, vp, getMin(rr))
+    }
   }
 
   protected def balance[C >: A](node: RBTree[C, B]): RBTree[C, B] = {
@@ -83,20 +98,12 @@ final case class Tree[+A : Ordering, B](
 
   // return node to be deleted with parent node
   protected[ds] def genericDelete[C >: A](k: C, parent: RBTree[C, B]): RBTree[C, B] = {
-    println("generic delete for " + k + " (" + k.## + ") when key is " + key + " (" + key.## + ")")
-
-    if (implicitly[Ordering[C]].lt(k, key)) {
-      println("lt, k: " + k + " key: " + key)
+    if (implicitly[Ordering[C]].lt(k, key))
       Tree(color, left.genericDelete(k, this), key, value, right)
-    }
-    else if (implicitly[Ordering[C]].gt(k, key)) {
-      println("gt, k: " + k + " key: " + key)
+    else if (implicitly[Ordering[C]].gt(k, key))
       Tree(color, left, key, value, right.genericDelete(k, this))
-    }
-    else {
-      println("eq, k: " + k + " key: " + key)
-      handleDelition(parent)
-    }
+    else
+      handleDeletion(parent, k)
   }
 }
 
