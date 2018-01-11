@@ -7,6 +7,8 @@ sealed trait RBTree[+A, B] {
 
     override def lt(x: C, y: C): Boolean = super.lt(x, y)
 
+    override def gt(x: C, y: C): Boolean = super.gt(x, y)
+
     override def equals(obj: scala.Any): Boolean = super.equals(obj)
   }
 
@@ -14,40 +16,26 @@ sealed trait RBTree[+A, B] {
     blacken(genericAdd(k, v))
   }
 
+  def delete[C >: A](k: C): RBTree[C, B] = {
+    val nodeParent = getNodeParent(k, initial = this)
+    nodeParent match {
+      case Tree(_, l: Tree[C, A], key, value, r: Tree[C, A]) => bstDeletion(k)
+      case Leaf() => this
+      case _ => rbDeletion(k)
+    }
+  }
+
   def get[C >: A](k: C): Option[B]
 
-  def delete[C >: A](k: C): RBTree[C, B] = {
-    val temp = genericDelete(k, this)
-    temp
-  }
+  protected def getNodeParent[C >: A](k: C, initial: RBTree[C, B]): RBTree[C, B]
 
-  protected[ds] def genericDelete[C >: A](k: C, parent: RBTree[C, B]): RBTree[C, B]
+  protected def genericAdd[C >: A](k: C, v: B): RBTree[C, B]
 
-  protected[ds] def genericAdd[C >: A](k: C, v: B): RBTree[C, B]
+  protected def bstDeletion[C >: A](k: C): RBTree[C, B]
 
-  private[this] def blacken[C >: A](node: RBTree[C, B]): RBTree[C, B] = node match {
-    case Leaf() => node
-    case Tree(_, l, k, v, r) => Tree(Black, l, k, v, r)
-  }
-
-  protected[ds] def handleDeletion[C >: A](node: RBTree[C, B], k: C): RBTree[C, B] = {
-    println("handle delition: " + node)
-    node match {
-      case Tree(cp, Tree(cl, ll, kl, vl, rl), kp, vp, Tree(cr, lr, kr, vr, rr)) =>
-        bstDeletion(parentNode = node, k)
-      case Tree(c, Leaf(), k, v, Leaf()) => Leaf()
-      case _ => ??? // handle crazy rbt deletion
-    }
-    node
-  }
-
-  private[this] def bstDeletion[C >: A](parentNode: RBTree[C, B], k: C): RBTree[C, B] = {
-    parentNode match {
-      case Tree(cp, Tree(cl, ll, kl, vl, rl), kp, vp, Tree(cr, lr, kr, vr, rr)) if kl == k =>
-        Tree(cp, getMin(rl), kp, vp, Tree(cr, lr, kr, vr, rr))
-      case Tree(cp, Tree(cl, ll, kl, vl, rl), kp, vp, Tree(cr, lr, kr, vr, rr)) if kr == k =>
-        Tree(cp, Tree(cl, ll, kl, vl, rl), kp, vp, getMin(rr))
-    }
+  protected def getMinChildOf[C >: A](node: RBTree[C, B]): (C, B) = node match {
+    case Tree(_, Leaf(), k, v, Leaf()) => (k, v)
+    case Tree(_, l: Tree[C, B], _, _, _) => getMinChildOf(l)
   }
 
   protected def balance[C >: A](node: RBTree[C, B]): RBTree[C, B] = {
@@ -67,11 +55,22 @@ sealed trait RBTree[+A, B] {
       case _ => node
     }
   }
+
   protected def getMin[C >: A](node: RBTree[C, B]): RBTree[C, B] = node match {
-    case Tree(_, Leaf(), _, _, _) => node
-    case Tree(_, l, _, _, _) => getMin(l)
+    case Tree(_, l: Tree[C, B], _, _, _) => getMin(l)
     case _ => node
   }
+
+  private def blacken[C >: A](node: RBTree[C, B]): RBTree[C, B] = node match {
+    case Leaf() => node
+    case Tree(_, l, k, v, r) => Tree(Black, l, k, v, r)
+  }
+
+  protected def rbDeletion[C >: A](k: C): RBTree[C, B] /*= {
+    nodeParent match {
+      case
+    }
+  }*/
 }
 
 final case class Tree[+A : Ordering, B](
@@ -88,7 +87,7 @@ final case class Tree[+A : Ordering, B](
     else Option(value)
   }
 
-  protected[ds] def genericAdd[C >: A](k: C, v: B): RBTree[C, B] = {
+  protected def genericAdd[C >: A](k: C, v: B): RBTree[C, B] = {
     if (implicitly[Ordering[C]].lt(k, key))
       balance(Tree(color, left.genericAdd(k, v), key, value, right))
     else if (implicitly[Ordering[C]].gt(k, key))
@@ -97,26 +96,43 @@ final case class Tree[+A : Ordering, B](
   }
 
   // return node to be deleted with parent node
-  protected[ds] def genericDelete[C >: A](k: C, parent: RBTree[C, B]): RBTree[C, B] = {
+  protected def getNodeParent[C >: A](k: C, initial: RBTree[C, B]): RBTree[C, B] = {
     if (implicitly[Ordering[C]].lt(k, key))
-      Tree(color, left.genericDelete(k, this), key, value, right)
+      Tree(color, left.getNodeParent(k, this), key, value, right)
     else if (implicitly[Ordering[C]].gt(k, key))
-      Tree(color, left, key, value, right.genericDelete(k, this))
+      Tree(color, left, key, value, right.getNodeParent(k, this))
     else
-      handleDeletion(parent, k)
+      initial
+  }
+
+  protected def bstDeletion[C >: A](k: C): RBTree[C, B] = {
+    if (implicitly[Ordering[C]].lt(k, key)) Tree(color, left.bstDeletion(k), key, value, right)
+    else if (implicitly[Ordering[C]].gt(k, key)) Tree(color, left, key, value, right.bstDeletion(k))
+    else {
+      val (minK, minV) = getMinChildOf(left)
+      Tree(color, left, minK, minV, right.bstDeletion(minK))
+    }
+  }
+
+  protected def rbDeletion[C >: A](k: C): RBTree[C, B] = {
+    left match {
+      case Tree(_, _, lk, _, _) if lk == k
+    }
+    if (implicitly[Ordering[C]].lt(k, key)) Tree(color, left.rbDeletion(k), key, value, right)
+    if (implicitly[Ordering[C]].gt(k, key)) Tree(color, left, key, value, right.rbDeletion(k))
   }
 }
 
 final case class Leaf[A, B]() extends RBTree[A, B] {
   def get[C >: Nothing](k: C): Option[Nothing] = None
 
-  protected[ds] def genericAdd[C >: A](k: C, v: B): RBTree[C, B] = {
+  protected def genericAdd[C >: A](k: C, v: B): RBTree[C, B] = {
     Tree(Red, this, k, v, this)
   }
 
-  protected[ds] def genericDelete[C >: A](k: C, parent: RBTree[C, B]): RBTree[C, B] = {
-    this
-  }
+  protected def getNodeParent[C >: A](k: C, initial: RBTree[C, B]): RBTree[C, B] = initial
+
+  protected def bstDeletion[C >: A](k: C): RBTree[C, B] = this
 }
 
 sealed trait Color
